@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Randomize Images from ZIP</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+      text-align: center;
+    }
+    input[type="file"] {
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+    .gallery {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .gallery img {
+      max-width: 200px;
+      max-height: 200px;
+      object-fit: cover;
+      border: 2px solid #333;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Upload ZIP of Images & Shuffle</h1>
+  <p>Upload a .zip file of images, shuffle them, and download the new .zip in random order.</p>
+
+  <input type="file" id="zipInput" accept=".zip">
+  <br>
+  <button id="downloadBtn" disabled>Download Shuffled ZIP</button>
+
+  <div class="gallery" id="gallery"></div>
+
+  <!-- JSZip CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <script>
+    let shuffledImages = [];
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    document.getElementById('zipInput').addEventListener('change', async function (event) {
+      const file = event.target.files[0];
+      if (!file || !file.name.endsWith('.zip')) return;
+
+      const zip = new JSZip();
+      const zipContent = await zip.loadAsync(file);
+      const gallery = document.getElementById('gallery');
+      const downloadBtn = document.getElementById('downloadBtn');
+      gallery.innerHTML = '';
+      shuffledImages = [];
+
+      // Load and filter only image files
+      const imageEntries = Object.values(zipContent.files).filter(f => !f.dir && /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name));
+
+      const shuffled = shuffle(imageEntries);
+
+      for (let entry of shuffled) {
+        const blob = await entry.async('blob');
+        shuffledImages.push({ name: entry.name, blob });
+
+        // Preview image
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          gallery.appendChild(img);
+        };
+        reader.readAsDataURL(blob);
+      }
+
+      if (shuffledImages.length > 0) {
+        downloadBtn.disabled = false;
+      }
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', async function () {
+      if (shuffledImages.length === 0) return;
+
+      const newZip = new JSZip();
+
+      for (let i = 0; i < shuffledImages.length; i++) {
+        const { blob } = shuffledImages[i];
+        const ext = shuffledImages[i].name.split('.').pop();
+        const newName = `image_${String(i + 1).padStart(3, '0')}.${ext}`;
+        newZip.file(newName, blob);
+      }
+
+      const zipBlob = await newZip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = 'shuffled_images.zip';
+      link.click();
+    });
+  </script>
+
+</body>
+</html>
